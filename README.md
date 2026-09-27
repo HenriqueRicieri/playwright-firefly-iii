@@ -41,6 +41,10 @@ rounding. One test uses three withdrawals of 0.004 because the result tells the 
 rounding each transaction gives 100.00, truncating the total gives 99.98, rounding the total gives 99.99.
 Firefly rounds the total.
 
+**Reconciliation.** Checking the ledger against a bank statement, line by line. When both agree, the ticked
+transactions are cleared and nothing is added. When the bank shows less money, the stored correction brings the
+ledger exactly to the statement. A transaction that is not on the statement yet stays open.
+
 **API contract.** The API is a product surface, not only a shortcut for test setup: authentication, validation
 messages per field, and a round trip where what is stored is what comes back.
 
@@ -55,7 +59,7 @@ src/api/       thin typed client for the REST API
 src/pages/     page objects, one per screen
 src/fixtures/  Playwright fixtures (API client and page objects)
 src/data/      unique test data and exact decimal math for money
-tests/setup/   first run: user, wizard, guided tours, API token, saved session
+tests/setup/   first run: user, wizard, guided tours, API token
 tests/api/     API contract tests
 tests/e2e/     UI flows checked through the API
 ```
@@ -78,6 +82,9 @@ A few things the suite had to handle, found while building it:
   endpoint the tour uses.
 - The transaction form renders its inputs before the autocomplete is attached, and text typed before that never
   opens the suggestions. The page object waits until the input becomes a combobox.
+- Firefly keeps flash messages and validation errors in the session. With one shared session, a page load in
+  one test consumed the error message another test was waiting for. It passed locally and failed only when CI
+  repeated the suite. Now each Playwright worker logs in once and has its own session.
 - The browser runs in the same time zone as the app container, so "now" in the form is "now" on the server.
 
 ## CI

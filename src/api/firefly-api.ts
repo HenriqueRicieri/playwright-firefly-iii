@@ -3,6 +3,9 @@ import { pastDate } from '../data/builders';
 
 export type TransactionType = 'withdrawal' | 'deposit' | 'transfer';
 
+/** Types Firefly creates on its own, e.g. the correction stored by a reconciliation. */
+export type StoredTransactionType = TransactionType | 'reconciliation' | 'opening balance';
+
 export interface Account {
   id: string;
   name: string;
@@ -13,13 +16,15 @@ export interface Account {
 
 export interface TransactionSplit {
   journalId: string;
-  type: TransactionType;
+  type: StoredTransactionType;
+  date: string;
   description: string;
   amount: string;
   sourceId: string;
   sourceName: string;
   destinationId: string;
   destinationName: string;
+  reconciled: boolean;
 }
 
 export interface Transaction {
@@ -53,13 +58,15 @@ interface TransactionResource {
   attributes: {
     transactions: {
       transaction_journal_id: string;
-      type: TransactionType;
+      type: StoredTransactionType;
+      date: string;
       description: string;
       amount: string;
       source_id: string;
       source_name: string;
       destination_id: string;
       destination_name: string;
+      reconciled: boolean;
     }[];
   };
 }
@@ -132,6 +139,14 @@ export class FireflyApi {
     );
   }
 
+  /** Every split that touches the account, newest first. */
+  async splitsOf(accountId: string): Promise<TransactionSplit[]> {
+    const response = await this.request.get(`/api/v1/accounts/${accountId}/transactions`, {
+      params: { limit: 100 },
+    });
+    return (await dataOf<TransactionResource[]>(response)).flatMap((r) => toTransaction(r).splits);
+  }
+
   /** Status of GET /transactions/{id}, for checking that something was really deleted. */
   async transactionStatus(id: string): Promise<number> {
     return (await this.request.get(`/api/v1/transactions/${id}`)).status();
@@ -161,12 +176,14 @@ function toTransaction(resource: TransactionResource): Transaction {
     splits: resource.attributes.transactions.map((t) => ({
       journalId: t.transaction_journal_id,
       type: t.type,
+      date: t.date,
       description: t.description,
       amount: t.amount,
       sourceId: t.source_id,
       sourceName: t.source_name,
       destinationId: t.destination_id,
       destinationName: t.destination_name,
+      reconciled: t.reconciled,
     })),
   };
 }

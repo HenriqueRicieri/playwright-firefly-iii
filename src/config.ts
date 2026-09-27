@@ -5,6 +5,5 @@ export const config = {
     email: process.env.FIREFLY_USER ?? 'qa@example.com',
     password: process.env.FIREFLY_PASSWORD ?? 'Test-only-pass-123!',
   },
-  storageStatePath: '.auth/user.json',
   tokenPath: '.auth/token.json',
 } as const;

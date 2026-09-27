@@ -5,7 +5,7 @@ import { config } from '../../src/config';
 import { markAllToursAsSeen } from '../../src/pages/tours';
 import { LoginPage, NewUserPage, RegisterPage, TokenPage } from '../../src/pages/auth-pages';
 
-setup('prepare user, session and API token', async ({ page }) => {
+setup('prepare user and API token', async ({ page }) => {
   const { email, password } = config.user;
 
   // A fresh instance (always the case in CI) has no users and sends /login to /register.
@@ -34,5 +34,4 @@ setup('prepare user, session and API token', async ({ page }) => {
 
   await mkdir(dirname(config.tokenPath), { recursive: true });
   await writeFile(config.tokenPath, JSON.stringify({ token }));
-  await page.context().storageState({ path: config.storageStatePath });
 });

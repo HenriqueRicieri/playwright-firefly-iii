@@ -28,7 +28,8 @@ export default defineConfig({
       name: 'e2e',
       testDir: 'tests/e2e',
       dependencies: ['setup'],
-      use: { ...devices['Desktop Chrome'], storageState: config.storageStatePath },
+      // Each worker logs in once and gets its own session (see src/fixtures).
+      use: { ...devices['Desktop Chrome'] },
     },
   ],
 });

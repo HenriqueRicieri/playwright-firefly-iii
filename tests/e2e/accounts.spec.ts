@@ -9,9 +9,8 @@ test.describe('Asset accounts', () => {
 
     await accountForm.goto();
     await accountForm.fill({ name, openingBalance: '1250.75', openingBalanceDate: pastDate(10) });
-    await accountForm.submit();
+    await accountForm.submitAndExpectStored();
 
-    await expect(accountForm.successMessage).toContainText(`New account "${name}" stored!`);
     const account = await api.findAssetAccountByName(name);
     expect(account.currentBalance).toBe('1250.75');
     expect(account.openingBalance).toBe('1250.75');

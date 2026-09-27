@@ -1,4 +1,4 @@
-import { type Locator, type Page } from '@playwright/test';
+import { expect, type Locator, type Page } from '@playwright/test';
 
 /** /accounts/create/asset */
 export class AccountFormPage {
@@ -8,7 +8,6 @@ export class AccountFormPage {
   readonly submitButton: Locator;
   /** Server-side validation messages shown in the error box at the top of the form. */
   readonly errors: Locator;
-  readonly successMessage: Locator;
 
   constructor(private readonly page: Page) {
     this.name = page.getByRole('textbox', { name: 'Name' });
@@ -19,7 +18,6 @@ export class AccountFormPage {
       .getByRole('alert')
       .filter({ hasText: /There (is|are) \w+ errors?/ })
       .getByRole('listitem');
-    this.successMessage = page.getByRole('alert').filter({ hasText: 'Success!' });
   }
 
   async goto() {
@@ -34,5 +32,11 @@ export class AccountFormPage {
 
   async submit() {
     await this.submitButton.click();
+  }
+
+  /** Stores the account. The redirect away from the form is the success signal. */
+  async submitAndExpectStored() {
+    await this.submitButton.click();
+    await expect(this.page).not.toHaveURL(/\/accounts\/create\//);
   }
 }
