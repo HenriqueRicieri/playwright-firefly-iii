@@ -8,7 +8,7 @@
     "test": "playwright test",
     "test:unit": "playwright test --project=unit",
     "test:api": "playwright test --project=api",
-    "test:e2e": "playwright test --project=e2e",
+    "test:e2e": "playwright test --project=e2e-*",
     "report": "playwright show-report",
     "lint": "eslint . && prettier --check .",
     "typecheck": "tsc --noEmit"

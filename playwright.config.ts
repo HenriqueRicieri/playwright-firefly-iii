@@ -6,9 +6,8 @@ export default defineConfig({
   retries: 0,
   workers: process.env.CI ? 2 : undefined,
   fullyParallel: true,
-  reporter: process.env.CI
-    ? [['html', { open: 'never' }], ['github'], ['list']]
-    : [['html', { open: 'never' }], ['list']],
+  // In CI every browser runs in its own job and writes a blob report; a final job merges them into one HTML report.
+  reporter: process.env.CI ? [['blob'], ['github'], ['list']] : [['html', { open: 'never' }], ['list']],
   use: {
     baseURL: config.baseURL,
     trace: 'retain-on-failure',
@@ -26,12 +25,24 @@ export default defineConfig({
       testDir: 'tests/api',
       dependencies: ['setup'],
     },
+    // Each worker registers its own user and session (see src/fixtures).
     {
-      name: 'e2e',
+      name: 'e2e-chromium',
       testDir: 'tests/e2e',
       dependencies: ['setup'],
-      // Each worker logs in once and gets its own session (see src/fixtures).
       use: { ...devices['Desktop Chrome'] },
+    },
+    {
+      name: 'e2e-firefox',
+      testDir: 'tests/e2e',
+      dependencies: ['setup'],
+      use: { ...devices['Desktop Firefox'] },
+    },
+    {
+      name: 'e2e-webkit',
+      testDir: 'tests/e2e',
+      dependencies: ['setup'],
+      use: { ...devices['Desktop Safari'] },
     },
   ],
 });
