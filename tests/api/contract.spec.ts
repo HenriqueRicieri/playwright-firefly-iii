@@ -1,22 +1,28 @@
 import { test, expect } from '../../src/fixtures';
 import { pastDate, uniqueName } from '../../src/data/builders';
+import { parseBody } from '../../src/api/firefly-api';
+import { Unauthenticated, ValidationError } from '../../src/api/schemas';
 
 // The API is not only a shortcut for test setup. It is a product surface with its own contract.
+// Every response in the suite is validated against a schema (src/api/schemas.ts), error bodies included.
 
 test.describe('Authentication', () => {
-  test('request without a token is rejected with 401', async ({ request }) => {
-    const response = await request.get('/api/v1/accounts', { headers: { Accept: 'application/json' } });
+  test('request without a token is rejected with 401', async ({ anonymousRequest }) => {
+    const response = await anonymousRequest.get('/api/v1/accounts', {
+      headers: { Accept: 'application/json' },
+    });
 
     expect(response.status()).toBe(401);
-    expect(await response.json()).toMatchObject({ message: 'Unauthenticated.' });
+    await parseBody(response, Unauthenticated);
   });
 
-  test('request with an invalid token is rejected with 401', async ({ request }) => {
-    const response = await request.get('/api/v1/accounts', {
+  test('request with an invalid token is rejected with 401', async ({ anonymousRequest }) => {
+    const response = await anonymousRequest.get('/api/v1/accounts', {
       headers: { Accept: 'application/json', Authorization: 'Bearer not-a-real-token' },
     });
 
     expect(response.status()).toBe(401);
+    await parseBody(response, Unauthenticated);
   });
 });
 
@@ -39,7 +45,7 @@ test.describe('Validation', () => {
     });
 
     expect(response.status()).toBe(422);
-    expect((await response.json()).errors).toEqual({
+    expect((await parseBody(response, ValidationError)).errors).toEqual({
       'transactions.0.amount': ['The transaction amount field is required.'],
     });
   });
@@ -48,23 +54,20 @@ test.describe('Validation', () => {
     // "10,50" must never become 1050 or 10. Rejecting it is the safe outcome.
     const account = await api.createAssetAccount({ name: uniqueName('Checking'), openingBalance: '100.00' });
 
-    const response = await api.request.post('/api/v1/transactions', {
-      data: {
-        transactions: [
-          {
-            type: 'withdrawal',
-            date: pastDate(),
-            amount: '10,50',
-            description: uniqueName('Comma'),
-            source_id: account.id,
-            destination_name: 'Shop',
-          },
-        ],
-      },
+    const response = await api.postTransaction({
+      splits: [
+        {
+          type: 'withdrawal',
+          amount: '10,50',
+          description: uniqueName('Comma'),
+          sourceId: account.id,
+          destinationName: 'Shop',
+        },
+      ],
     });
 
     expect(response.status()).toBe(422);
-    expect((await response.json()).errors).toEqual({
+    expect((await parseBody(response, ValidationError)).errors).toEqual({
       'transactions.0.amount': ['The transaction amount must be a number.'],
     });
     expect(await api.balanceOf(account.id)).toBe('100.00');
@@ -74,7 +77,7 @@ test.describe('Validation', () => {
     const response = await api.request.post('/api/v1/accounts', { data: { type: 'asset' } });
 
     expect(response.status()).toBe(422);
-    expect((await response.json()).errors).toEqual({
+    expect((await parseBody(response, ValidationError)).errors).toEqual({
       name: ['The name field is required.'],
       account_role: ['The account role field is required when type is asset.'],
     });
@@ -101,6 +104,7 @@ test.describe('Round trip', () => {
       type: 'withdrawal',
       description: input.description,
       amount: '42.420000000000',
+      currencyCode: 'EUR',
       sourceId: account.id,
       sourceName: account.name,
       destinationName: input.destinationName,

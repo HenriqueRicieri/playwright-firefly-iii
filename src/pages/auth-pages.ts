@@ -54,7 +54,13 @@ export class TokenPage {
 
   /** Creates a Personal Access Token through the UI and returns it. The UI shows it only once. */
   async createPersonalAccessToken(name: string): Promise<string> {
+    // The button belongs to a Vue component, and a click before it mounts does nothing. The component
+    // loads the existing tokens as soon as it mounts, so that response means the button is live.
+    const mounted = this.page.waitForResponse(
+      (r) => r.url().endsWith('/oauth/personal-access-tokens') && r.request().method() === 'GET',
+    );
     await this.page.goto('/profile/oauth');
+    await mounted;
     await this.page.getByText('Create new token', { exact: true }).last().click();
     // The modal has no accessible name, so identify it by its heading.
     const dialog = this.page

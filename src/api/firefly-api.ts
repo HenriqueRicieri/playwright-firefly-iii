@@ -1,10 +1,16 @@
 import { expect, type APIRequestContext, type APIResponse } from '@playwright/test';
+import { z } from 'zod';
 import { pastDate } from '../data/builders';
-
-export type TransactionType = 'withdrawal' | 'deposit' | 'transfer';
-
-/** Types Firefly creates on its own, e.g. the correction stored by a reconciliation. */
-export type StoredTransactionType = TransactionType | 'reconciliation' | 'opening balance';
+import {
+  AccountResource,
+  BudgetLimitResource,
+  envelope,
+  IdOnlyResource,
+  TransactionResource,
+  ValidationError,
+  type StoredTransactionType,
+  type TransactionType,
+} from './schemas';
 
 export interface Account {
   id: string;
@@ -16,25 +22,30 @@ export interface Account {
 
 export interface TransactionSplit {
   journalId: string;
-  type: StoredTransactionType;
+  type: z.infer<typeof StoredTransactionType>;
   date: string;
   description: string;
   amount: string;
+  currencyCode: string;
+  foreignAmount: string | null;
+  foreignCurrencyCode: string | null;
   sourceId: string;
   sourceName: string;
   destinationId: string;
   destinationName: string;
   reconciled: boolean;
   categoryName: string | null;
+  budgetId: string | null;
 }
 
 export interface Transaction {
   id: string;
+  groupTitle: string | null;
   splits: TransactionSplit[];
 }
 
-export interface NewTransaction {
-  type: TransactionType;
+export interface NewSplit {
+  type: z.infer<typeof TransactionType>;
   description: string;
   amount: string;
   date?: string;
@@ -42,36 +53,12 @@ export interface NewTransaction {
   sourceName?: string;
   destinationId?: string;
   destinationName?: string;
+  /** Required by Firefly when source and destination use different currencies. */
+  foreignAmount?: string;
+  foreignCurrencyCode?: string;
 }
 
-interface AccountResource {
-  id: string;
-  attributes: {
-    name: string;
-    current_balance: string;
-    opening_balance: string | null;
-    currency_code: string;
-  };
-}
-
-interface TransactionResource {
-  id: string;
-  attributes: {
-    transactions: {
-      transaction_journal_id: string;
-      type: StoredTransactionType;
-      date: string;
-      description: string;
-      amount: string;
-      source_id: string;
-      source_name: string;
-      destination_id: string;
-      destination_name: string;
-      reconciled: boolean;
-      category_name: string | null;
-    }[];
-  };
-}
+export type ValidationErrorBody = z.infer<typeof ValidationError>;
 
 /** Thin client over the Firefly III REST API (/api/v1). Only what the suite needs. */
 export class FireflyApi {
@@ -79,23 +66,30 @@ export class FireflyApi {
 
   // Accounts
 
-  async createAssetAccount(input: { name: string; openingBalance?: string }): Promise<Account> {
+  async createAssetAccount(input: {
+    name: string;
+    openingBalance?: string;
+    currencyCode?: string;
+  }): Promise<Account> {
     const response = await this.request.post('/api/v1/accounts', {
       data: {
         name: input.name,
         type: 'asset',
         account_role: 'defaultAsset',
+        currency_code: input.currencyCode,
         ...(input.openingBalance !== undefined && {
           opening_balance: input.openingBalance,
           opening_balance_date: pastDate(30),
         }),
       },
     });
-    return toAccount(await dataOf<AccountResource>(response));
+    return toAccount(await parse(response, envelope(AccountResource)));
   }
 
   async getAccount(id: string): Promise<Account> {
-    return toAccount(await dataOf<AccountResource>(await this.request.get(`/api/v1/accounts/${id}`)));
+    return toAccount(
+      await parse(await this.request.get(`/api/v1/accounts/${id}`), envelope(AccountResource)),
+    );
   }
 
   async balanceOf(accountId: string): Promise<string> {
@@ -107,37 +101,49 @@ export class FireflyApi {
     const response = await this.request.get('/api/v1/search/accounts', {
       params: { query: name, field: 'name', type: 'asset' },
     });
-    const matches = (await dataOf<AccountResource[]>(response)).filter((a) => a.attributes.name === name);
+    const all = await parse(response, envelope(z.array(AccountResource)));
+    const matches = all.filter((a) => a.attributes.name === name);
     expect(matches, `asset accounts named "${name}"`).toHaveLength(1);
     return toAccount(matches[0]!);
   }
 
   // Transactions
 
-  async createTransaction(input: NewTransaction): Promise<Transaction> {
-    const response = await this.request.post('/api/v1/transactions', {
+  async createTransaction(split: NewSplit): Promise<Transaction> {
+    return this.createSplitTransaction({ splits: [split] });
+  }
+
+  /** One transaction group with several splits, e.g. a single receipt paid for different things. */
+  async createSplitTransaction(input: { groupTitle?: string; splits: NewSplit[] }): Promise<Transaction> {
+    const response = await this.postTransaction(input);
+    return toTransaction(await parse(response, envelope(TransactionResource)));
+  }
+
+  /** Raw POST /transactions, for tests that check how invalid input is rejected. */
+  async postTransaction(input: { groupTitle?: string; splits: NewSplit[] }): Promise<APIResponse> {
+    return this.request.post('/api/v1/transactions', {
       data: {
         error_if_duplicate_hash: false,
-        transactions: [
-          {
-            type: input.type,
-            date: input.date ?? pastDate(),
-            amount: input.amount,
-            description: input.description,
-            source_id: input.sourceId,
-            source_name: input.sourceName,
-            destination_id: input.destinationId,
-            destination_name: input.destinationName,
-          },
-        ],
+        group_title: input.groupTitle,
+        transactions: input.splits.map((s) => ({
+          type: s.type,
+          date: s.date ?? pastDate(),
+          amount: s.amount,
+          description: s.description,
+          source_id: s.sourceId,
+          source_name: s.sourceName,
+          destination_id: s.destinationId,
+          destination_name: s.destinationName,
+          foreign_amount: s.foreignAmount,
+          foreign_currency_code: s.foreignCurrencyCode,
+        })),
       },
     });
-    return toTransaction(await dataOf<TransactionResource>(response));
   }
 
   async getTransaction(id: string): Promise<Transaction> {
     return toTransaction(
-      await dataOf<TransactionResource>(await this.request.get(`/api/v1/transactions/${id}`)),
+      await parse(await this.request.get(`/api/v1/transactions/${id}`), envelope(TransactionResource)),
     );
   }
 
@@ -146,28 +152,37 @@ export class FireflyApi {
     const response = await this.request.get(`/api/v1/accounts/${accountId}/transactions`, {
       params: { limit: 100 },
     });
-    return (await dataOf<TransactionResource[]>(response)).flatMap((r) => toTransaction(r).splits);
+    const groups = await parse(response, envelope(z.array(TransactionResource)));
+    return groups.flatMap((g) => toTransaction(g).splits);
+  }
+
+  /** Status of GET /transactions/{id}, for checking that something was really deleted. */
+  async transactionStatus(id: string): Promise<number> {
+    return (await this.request.get(`/api/v1/transactions/${id}`)).status();
   }
 
   // Budgets
 
   /** A budget with one limit for the given period. */
   async createBudget(input: { name: string; limit: string; start: string; end: string }) {
-    const budget = await dataOf<{ id: string }>(
+    const budget = await parse(
       await this.request.post('/api/v1/budgets', { data: { name: input.name } }),
+      envelope(IdOnlyResource),
     );
-    const limit = await dataOf<{ id: string }>(
+    const limit = await parse(
       await this.request.post(`/api/v1/budgets/${budget.id}/limits`, {
         data: { start: input.start, end: input.end, amount: input.limit },
       }),
+      envelope(IdOnlyResource),
     );
     return { id: budget.id, name: input.name, limitId: limit.id };
   }
 
   /** What has been spent against a budget limit, as Firefly reports it (negative, or "0" if nothing). */
   async spentOnLimit(budgetId: string, limitId: string): Promise<string> {
-    const limit = await dataOf<{ attributes: { spent: { sum: string }[] } }>(
+    const limit = await parse(
       await this.request.get(`/api/v1/budgets/${budgetId}/limits/${limitId}`),
+      envelope(BudgetLimitResource),
     );
     return limit.attributes.spent[0]?.sum ?? '0';
   }
@@ -182,10 +197,11 @@ export class FireflyApi {
     keyword: string;
     category: string;
   }): Promise<{ ruleId: string; groupId: string }> {
-    const group = await dataOf<{ id: string }>(
+    const group = await parse(
       await this.request.post('/api/v1/rule-groups', { data: { title: `Group for ${input.keyword}` } }),
+      envelope(IdOnlyResource),
     );
-    const rule = await dataOf<{ id: string }>(
+    const rule = await parse(
       await this.request.post('/api/v1/rules', {
         data: {
           title: `Categorize ${input.keyword}`,
@@ -197,6 +213,7 @@ export class FireflyApi {
           actions: [{ type: 'set_category', value: input.category }],
         },
       }),
+      envelope(IdOnlyResource),
     );
     return { ruleId: rule.id, groupId: group.id };
   }
@@ -205,20 +222,32 @@ export class FireflyApi {
     // Deleting the group deletes its rules too.
     expect((await this.request.delete(`/api/v1/rule-groups/${groupId}`)).status()).toBe(204);
   }
-
-  /** Status of GET /transactions/{id}, for checking that something was really deleted. */
-  async transactionStatus(id: string): Promise<number> {
-    return (await this.request.get(`/api/v1/transactions/${id}`)).status();
-  }
 }
 
-async function dataOf<T>(response: APIResponse): Promise<T> {
-  // toBeOK() prints the response body on failure, which is where Firefly puts validation errors.
+/**
+ * Checks the status, then validates the body against its schema and unwraps `data`.
+ * toBeOK() prints the response body on failure, which is where Firefly puts validation errors.
+ */
+async function parse<T extends z.ZodType<{ data: unknown }>>(
+  response: APIResponse,
+  schema: T,
+): Promise<z.infer<T>['data']> {
   await expect(response).toBeOK();
-  return ((await response.json()) as { data: T }).data;
+  return parseBody(response, schema).then((body) => body.data);
 }
 
-function toAccount(resource: AccountResource): Account {
+/** Validates any response body (including error bodies) against a schema. */
+export async function parseBody<T extends z.ZodType>(response: APIResponse, schema: T): Promise<z.infer<T>> {
+  const result = schema.safeParse(await response.json());
+  if (!result.success) {
+    throw new Error(
+      `Response of ${response.url()} does not match the expected contract:\n${z.prettifyError(result.error)}`,
+    );
+  }
+  return result.data;
+}
+
+function toAccount(resource: z.infer<typeof AccountResource>): Account {
   const a = resource.attributes;
   return {
     id: resource.id,
@@ -229,21 +258,26 @@ function toAccount(resource: AccountResource): Account {
   };
 }
 
-function toTransaction(resource: TransactionResource): Transaction {
+function toTransaction(resource: z.infer<typeof TransactionResource>): Transaction {
   return {
     id: resource.id,
+    groupTitle: resource.attributes.group_title,
     splits: resource.attributes.transactions.map((t) => ({
       journalId: t.transaction_journal_id,
       type: t.type,
       date: t.date,
       description: t.description,
       amount: t.amount,
+      currencyCode: t.currency_code,
+      foreignAmount: t.foreign_amount,
+      foreignCurrencyCode: t.foreign_currency_code,
       sourceId: t.source_id,
       sourceName: t.source_name,
       destinationId: t.destination_id,
       destinationName: t.destination_name,
       reconciled: t.reconciled,
       categoryName: t.category_name,
+      budgetId: t.budget_id,
     })),
   };
 }

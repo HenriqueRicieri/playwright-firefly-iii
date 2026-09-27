@@ -24,8 +24,9 @@ npm run report      # HTML report
 npm run env:down    # removes the containers and the database
 ```
 
-The suite prepares an empty instance by itself: it registers a test user, completes the first-run wizard and
-creates a Personal Access Token through the UI. Nothing needs to be clicked by hand.
+The suite prepares an empty instance by itself. A setup step registers the administrator and opens registration.
+Then every Playwright worker registers its own user, completes the first-run wizard and creates a Personal Access
+Token through the UI. Nothing needs to be clicked by hand.
 
 ## Why these scenarios
 
@@ -54,7 +55,8 @@ transaction of the user.
 expense without a budget does not touch it.
 
 **API contract.** The API is a product surface, not only a shortcut for test setup: authentication, validation
-messages per field, and a round trip where what is stored is what comes back.
+messages per field, and a round trip where what is stored is what comes back. Every response the suite reads,
+error bodies included, is validated against a schema, so a field that changes type or disappears fails loudly.
 
 Where Firefly's behavior is a design choice rather than a bug, the test documents it. For example, the amount
 field accepts `10.999` for a currency with 2 decimals, stores it in full and rounds only the displayed balance.
@@ -63,11 +65,11 @@ field accepts `10.999` for a currency with 2 decimals, stores it in full and rou
 
 ```
 docker/        pinned Firefly III + MariaDB for a disposable test instance
-src/api/       thin typed client for the REST API
+src/api/       typed client for the REST API and the response schemas (zod)
 src/pages/     page objects, one per screen
-src/fixtures/  Playwright fixtures (API client and page objects)
+src/fixtures/  Playwright fixtures: one user per worker, API client, page objects
 src/data/      unique test data and exact decimal math for money
-tests/setup/   first run: user, wizard, guided tours, API token
+tests/setup/   once per run: instance health, administrator, open registration
 tests/api/     API contract tests
 tests/e2e/     UI flows checked through the API
 ```
@@ -76,6 +78,7 @@ Rules the suite follows:
 
 - **Independent tests.** Each test creates its own data with unique names, so tests run in parallel and in any
   order.
+- **Isolated users.** Each worker registers a new user, so parallel tests share neither data nor a session.
 - **No fixed waits.** Tests wait for state: a locator, a URL, a network response.
 - **User-facing locators first** (`getByRole`, `getByPlaceholder`). Where Firefly's markup has no accessible name,
   the page object says why it falls back to an id.
@@ -92,7 +95,11 @@ A few things the suite had to handle, found while building it:
   opens the suggestions. The page object waits until the input becomes a combobox.
 - Firefly keeps flash messages and validation errors in the session. With one shared session, a page load in
   one test consumed the error message another test was waiting for. It passed locally and failed only when CI
-  repeated the suite. Now each Playwright worker logs in once and has its own session.
+  repeated the suite. Now each Playwright worker has its own user and session.
+- Firefly limits logins to 5 attempts per minute per IP address, not per user, and the whole suite runs from
+  one IP. Workers therefore register new users instead of logging in, which never touches the limit.
+- Buttons on the token page belong to a Vue component and ignore clicks until it mounts. Under load the click
+  came first. The page object now waits for the request the component makes when it mounts.
 - The browser runs in the same time zone as the app container, so "now" in the form is "now" on the server.
 
 ## CI

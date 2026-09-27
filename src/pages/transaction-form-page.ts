@@ -1,5 +1,7 @@
 import { expect, type Locator, type Page } from '@playwright/test';
-import type { TransactionType } from '../api/firefly-api';
+import type { NewSplit } from '../api/firefly-api';
+
+type TransactionType = NewSplit['type'];
 
 /**
  * Create and edit forms for transactions (/transactions/create/{type}, /transactions/edit/{id}).
