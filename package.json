@@ -1,0 +1,25 @@
+{
+  "name": "playwright-firefly-iii",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "env:up": "docker compose -f docker/compose.yml up -d --wait",
+    "env:down": "docker compose -f docker/compose.yml down -v",
+    "test": "playwright test",
+    "test:api": "playwright test --project=api",
+    "test:e2e": "playwright test --project=e2e",
+    "report": "playwright show-report",
+    "lint": "eslint . && prettier --check .",
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "@playwright/test": "^1.63.0",
+    "@types/node": "^26.6.3",
+    "eslint": "^10.11.0",
+    "eslint-config-prettier": "^10.1.8",
+    "prettier": "^3.9.9",
+    "typescript": "^6.0.3",
+    "typescript-eslint": "^8.70.1"
+  }
+}

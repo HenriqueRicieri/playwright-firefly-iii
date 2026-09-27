@@ -1,0 +1,27 @@
+# Throwaway Firefly III instance for the test suite. Never point this at real financial data.
+name: firefly-test
+
+services:
+  app:
+    image: fireflyiii/core:version-6.7.4
+    env_file: firefly.env
+    ports:
+      - '8080:8080'
+    depends_on:
+      db:
+        condition: service_healthy
+    healthcheck:
+      test: ['CMD-SHELL', 'curl -fsS http://localhost:8080/health || exit 1']
+      interval: 5s
+      timeout: 5s
+      retries: 60
+      start_period: 20s
+
+  db:
+    image: mariadb:11.8
+    env_file: db.env
+    healthcheck:
+      test: ['CMD', 'healthcheck.sh', '--connect', '--innodb_initialized']
+      interval: 5s
+      timeout: 5s
+      retries: 30
