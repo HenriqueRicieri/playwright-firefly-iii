@@ -1,4 +1,5 @@
 import { expect, type Locator, type Page } from '@playwright/test';
+import { step } from '../step';
 
 /** /accounts/create/asset */
 export class AccountFormPage {
@@ -20,21 +21,25 @@ export class AccountFormPage {
       .getByRole('listitem');
   }
 
+  @step
   async goto() {
     await this.page.goto('/accounts/create/asset');
   }
 
+  @step
   async fill(input: { name: string; openingBalance?: string; openingBalanceDate?: string }) {
     await this.name.fill(input.name);
     if (input.openingBalance !== undefined) await this.openingBalance.fill(input.openingBalance);
     if (input.openingBalanceDate !== undefined) await this.openingBalanceDate.fill(input.openingBalanceDate);
   }
 
+  @step
   async submit() {
     await this.submitButton.click();
   }
 
   /** Stores the account. The redirect away from the form is the success signal. */
+  @step
   async submitAndExpectStored() {
     await this.submitButton.click();
     await expect(this.page).not.toHaveURL(/\/accounts\/create\//);

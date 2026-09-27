@@ -1,13 +1,16 @@
 import { expect, type Page } from '@playwright/test';
+import { step } from '../step';
 
 export class LoginPage {
   constructor(private readonly page: Page) {}
 
+  @step
   async goto() {
     await this.page.goto('/login');
   }
 
   /** Returns false when the credentials were rejected (e.g. the user does not exist yet). */
+  @step
   async login(email: string, password: string): Promise<boolean> {
     await this.page.getByRole('textbox', { name: 'Email address' }).fill(email);
     await this.page.getByRole('textbox', { name: 'Password', exact: true }).fill(password);
@@ -20,6 +23,7 @@ export class LoginPage {
 export class RegisterPage {
   constructor(private readonly page: Page) {}
 
+  @step
   async register(email: string, password: string) {
     await this.page.goto('/register');
     await this.page.getByRole('textbox', { name: 'Email address' }).fill(email);
@@ -40,6 +44,7 @@ export class NewUserPage {
     return this.page.url().endsWith('/new-user');
   }
 
+  @step
   async complete(bankName: string) {
     await this.page.getByRole('textbox', { name: 'Bank name' }).fill(bankName);
     // The 'Balance' label is not associated with its input, so there is no accessible name to target.
@@ -53,6 +58,7 @@ export class TokenPage {
   constructor(private readonly page: Page) {}
 
   /** Creates a Personal Access Token through the UI and returns it. The UI shows it only once. */
+  @step
   async createPersonalAccessToken(name: string): Promise<string> {
     // The button belongs to a Vue component, and a click before it mounts does nothing. The component
     // loads the existing tokens as soon as it mounts, so that response means the button is live.

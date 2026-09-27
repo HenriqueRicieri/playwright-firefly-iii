@@ -18,6 +18,8 @@ export default defineConfig({
     locale: 'en-US',
   },
   projects: [
+    // Tests of the suite's own helpers. No browser, no Firefly.
+    { name: 'unit', testDir: 'tests/unit' },
     { name: 'setup', testDir: 'tests/setup', testMatch: /.*\.setup\.ts/ },
     {
       name: 'api',

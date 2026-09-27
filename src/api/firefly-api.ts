@@ -1,4 +1,5 @@
 import { expect, type APIRequestContext, type APIResponse } from '@playwright/test';
+import { step } from '../step';
 import { z } from 'zod';
 import { pastDate } from '../data/builders';
 import {
@@ -66,6 +67,7 @@ export class FireflyApi {
 
   // Accounts
 
+  @step
   async createAssetAccount(input: {
     name: string;
     openingBalance?: string;
@@ -86,17 +88,20 @@ export class FireflyApi {
     return toAccount(await parse(response, envelope(AccountResource)));
   }
 
+  @step
   async getAccount(id: string): Promise<Account> {
     return toAccount(
       await parse(await this.request.get(`/api/v1/accounts/${id}`), envelope(AccountResource)),
     );
   }
 
+  @step
   async balanceOf(accountId: string): Promise<string> {
     return (await this.getAccount(accountId)).currentBalance;
   }
 
   /** Exact-name lookup. Safe because every test creates its own uniquely named accounts. */
+  @step
   async findAssetAccountByName(name: string): Promise<Account> {
     const response = await this.request.get('/api/v1/search/accounts', {
       params: { query: name, field: 'name', type: 'asset' },
@@ -109,17 +114,20 @@ export class FireflyApi {
 
   // Transactions
 
+  @step
   async createTransaction(split: NewSplit): Promise<Transaction> {
     return this.createSplitTransaction({ splits: [split] });
   }
 
   /** One transaction group with several splits, e.g. a single receipt paid for different things. */
+  @step
   async createSplitTransaction(input: { groupTitle?: string; splits: NewSplit[] }): Promise<Transaction> {
     const response = await this.postTransaction(input);
     return toTransaction(await parse(response, envelope(TransactionResource)));
   }
 
   /** Raw POST /transactions, for tests that check how invalid input is rejected. */
+  @step
   async postTransaction(input: { groupTitle?: string; splits: NewSplit[] }): Promise<APIResponse> {
     return this.request.post('/api/v1/transactions', {
       data: {
@@ -141,6 +149,7 @@ export class FireflyApi {
     });
   }
 
+  @step
   async getTransaction(id: string): Promise<Transaction> {
     return toTransaction(
       await parse(await this.request.get(`/api/v1/transactions/${id}`), envelope(TransactionResource)),
@@ -148,6 +157,7 @@ export class FireflyApi {
   }
 
   /** Every split that touches the account, newest first. */
+  @step
   async splitsOf(accountId: string): Promise<TransactionSplit[]> {
     const response = await this.request.get(`/api/v1/accounts/${accountId}/transactions`, {
       params: { limit: 100 },
@@ -157,6 +167,7 @@ export class FireflyApi {
   }
 
   /** Status of GET /transactions/{id}, for checking that something was really deleted. */
+  @step
   async transactionStatus(id: string): Promise<number> {
     return (await this.request.get(`/api/v1/transactions/${id}`)).status();
   }
@@ -164,6 +175,7 @@ export class FireflyApi {
   // Budgets
 
   /** A budget with one limit for the given period. */
+  @step
   async createBudget(input: { name: string; limit: string; start: string; end: string }) {
     const budget = await parse(
       await this.request.post('/api/v1/budgets', { data: { name: input.name } }),
@@ -179,6 +191,7 @@ export class FireflyApi {
   }
 
   /** What has been spent against a budget limit, as Firefly reports it (negative, or "0" if nothing). */
+  @step
   async spentOnLimit(budgetId: string, limitId: string): Promise<string> {
     const limit = await parse(
       await this.request.get(`/api/v1/budgets/${budgetId}/limits/${limitId}`),
@@ -193,6 +206,7 @@ export class FireflyApi {
    * Creates an active rule "description contains <keyword> -> set category <category>" in its own group.
    * Rules apply to every transaction of the user, so tests must use a unique keyword.
    */
+  @step
   async createCategoryRule(input: {
     keyword: string;
     category: string;
@@ -218,6 +232,7 @@ export class FireflyApi {
     return { ruleId: rule.id, groupId: group.id };
   }
 
+  @step
   async deleteRuleGroup(groupId: string) {
     // Deleting the group deletes its rules too.
     expect((await this.request.delete(`/api/v1/rule-groups/${groupId}`)).status()).toBe(204);

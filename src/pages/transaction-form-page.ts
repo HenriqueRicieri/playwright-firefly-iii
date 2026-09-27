@@ -1,4 +1,5 @@
 import { expect, type Locator, type Page } from '@playwright/test';
+import { step } from '../step';
 import type { NewSplit } from '../api/firefly-api';
 
 type TransactionType = NewSplit['type'];
@@ -30,11 +31,13 @@ export class TransactionFormPage {
     this.errors = page.locator('.invalid-feedback').filter({ visible: true });
   }
 
+  @step
   async gotoCreate(type: TransactionType) {
     await this.page.goto(`/transactions/create/${type}`);
     await this.waitUntilReady();
   }
 
+  @step
   async gotoEdit(transactionId: string) {
     await this.page.goto(`/transactions/edit/${transactionId}`);
     await this.waitUntilReady();
@@ -51,21 +54,25 @@ export class TransactionFormPage {
   }
 
   /** Picks an existing account from the autocomplete (needed for asset accounts). */
+  @step
   async selectAccount(field: 'source' | 'destination', accountName: string) {
     await this[field].fill(accountName);
     await this.page.getByRole('menuitem', { name: `${accountName} (` }).click();
   }
 
   /** Types a free-text name. Firefly creates the expense/revenue account if it does not exist. */
+  @step
   async typeAccount(field: 'source' | 'destination', accountName: string) {
     await this[field].fill(accountName);
   }
 
+  @step
   async fillAmount(amount: string) {
     await this.amount.fill(amount);
   }
 
   /** Submits and returns the transaction group id taken from the page Firefly redirects to. */
+  @step
   async submitAndGetId(): Promise<string> {
     await this.submitButton.click();
     await expect(this.page).toHaveURL(/\/transactions\/show\/\d+/);
@@ -74,6 +81,7 @@ export class TransactionFormPage {
 
   // Convenience flows for the three basic types.
 
+  @step
   async createWithdrawal(input: {
     description: string;
     from: string;
@@ -92,6 +100,7 @@ export class TransactionFormPage {
     return this.submitAndGetId();
   }
 
+  @step
   async createDeposit(input: { description: string; from: string; to: string; amount: string }) {
     await this.gotoCreate('deposit');
     await this.description.fill(input.description);
@@ -101,6 +110,7 @@ export class TransactionFormPage {
     return this.submitAndGetId();
   }
 
+  @step
   async createTransfer(input: { description: string; from: string; to: string; amount: string }) {
     await this.gotoCreate('transfer');
     await this.description.fill(input.description);
@@ -115,6 +125,7 @@ export class TransactionFormPage {
 export class TransactionDeletePage {
   constructor(private readonly page: Page) {}
 
+  @step
   async delete(transactionId: string) {
     await this.page.goto(`/transactions/delete/${transactionId}`);
     await this.page.getByRole('button', { name: 'Delete permanently' }).click();
