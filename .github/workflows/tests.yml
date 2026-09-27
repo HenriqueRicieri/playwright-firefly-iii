@@ -12,7 +12,8 @@ on:
         default: '1'
 
 concurrency:
-  group: tests-${{ github.ref }}
+  # A manual run (e.g. with repeat_each) must not cancel the push run on the same branch, or vice versa.
+  group: tests-${{ github.event_name }}-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:

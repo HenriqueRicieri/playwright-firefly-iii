@@ -145,13 +145,14 @@ test.describe('Multiple currencies', () => {
       name: uniqueName('EUR account'),
       openingBalance: '1000.00',
     });
-    // USD is disabled on a new instance, and nothing enables it here.
-    const dollars = await api.createAssetAccount({ name: uniqueName('USD account'), currencyCode: 'USD' });
+    // Enabling a currency lasts for the whole user, and the tests above enable USD for this worker's user.
+    // No test ever enables CHF, so it is always disabled here.
+    const francs = await api.createAssetAccount({ name: uniqueName('CHF account'), currencyCode: 'CHF' });
 
     await transactionForm.gotoCreate('transfer');
     await transactionForm.description.fill(uniqueName('Currency exchange'));
     await transactionForm.selectAccount('source', euros.name);
-    await transactionForm.selectAccount('destination', dollars.name);
+    await transactionForm.selectAccount('destination', francs.name);
 
     // Fails fast here instead of waiting for a submit that never finishes.
     expect(pageErrors.map((e) => e.message)).toEqual([]);
