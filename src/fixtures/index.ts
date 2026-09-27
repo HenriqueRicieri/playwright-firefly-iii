@@ -1,5 +1,5 @@
 import { resolve } from 'node:path';
-import { test as base, type APIRequestContext } from '@playwright/test';
+import { test as base, expect, type APIRequestContext } from '@playwright/test';
 import { FireflyApi } from '../api/firefly-api';
 import { config } from '../config';
 import { AccountFormPage } from '../pages/account-form-page';
@@ -18,6 +18,8 @@ interface Fixtures {
   reconcilePage: ReconcilePage;
   /** Creates a category rule that is deleted after the test. */
   categoryRule: (input: { keyword: string; category: string }) => Promise<void>;
+  /** Uncaught JavaScript errors on the page. Checked automatically after every test. */
+  pageErrors: Error[];
 }
 
 interface WorkerFixtures {
@@ -58,6 +60,21 @@ export const test = base.extend<Fixtures, WorkerFixtures>({
     await request.dispose();
   },
 
+  // A broken script can leave a screen looking fine while it silently stops working, so any uncaught
+  // error on the page fails the test. A test that expects one can read and clear `pageErrors`.
+  pageErrors: [
+    async ({ page }, use) => {
+      const errors: Error[] = [];
+      page.on('pageerror', (error) => errors.push(error));
+      await use(errors);
+      expect(
+        errors.map((e) => e.message),
+        'uncaught errors on the page',
+      ).toEqual([]);
+    },
+    { auto: true },
+  ],
+
   accountForm: async ({ page }, use) => use(new AccountFormPage(page)),
   transactionForm: async ({ page }, use) => use(new TransactionFormPage(page)),
   transactionDelete: async ({ page }, use) => use(new TransactionDeletePage(page)),
@@ -71,4 +88,4 @@ export const test = base.extend<Fixtures, WorkerFixtures>({
   },
 });
 
-export { expect } from '@playwright/test';
+export { expect };

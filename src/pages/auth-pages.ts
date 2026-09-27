@@ -1,4 +1,4 @@
-import { expect, type Page } from '@playwright/test';
+import { expect, type Page, type Request } from '@playwright/test';
 import { step } from '../step';
 
 export class LoginPage {
@@ -31,8 +31,33 @@ export class RegisterPage {
     await this.page.getByRole('textbox', { name: 'Password (again)' }).fill(password);
     // This checkbox calls haveibeenpwned.com. The suite must not depend on external services.
     await this.page.getByRole('checkbox', { name: 'Verify password security' }).uncheck();
-    await this.page.getByRole('button', { name: 'Register' }).click();
-    await expect(this.page).not.toHaveURL(/\/register$/);
+    // WebKit under load sometimes drops this click: the form is valid, nothing is sent and the page just
+    // sits there. The click is repeated only while no POST /register has left the browser, so a slow
+    // server can never lead to a second registration.
+    let submitted = false;
+    const onRequest = (request: Request) => {
+      if (request.method() === 'POST' && request.url().endsWith('/register')) submitted = true;
+    };
+    this.page.on('request', onRequest);
+    try {
+      await expect(async () => {
+        if (!submitted) await this.page.getByRole('button', { name: 'Register' }).click();
+        await expect(this.page).not.toHaveURL(/\/register$/, { timeout: 3_000 });
+      }).toPass({ timeout: 30_000 });
+    } catch (error) {
+      // Say why, not only that the URL did not change. Server errors come in an alert; the page's own
+      // checks (length, match) use a plain box.
+      const messages = await this.page
+        .locator('[role="alert"], #client-errors')
+        .filter({ visible: true })
+        .allInnerTexts();
+      throw new Error(
+        `Registering ${email} failed (request sent: ${submitted}). The page says: ${messages.join(' | ') || '(nothing)'}`,
+        { cause: error },
+      );
+    } finally {
+      this.page.off('request', onRequest);
+    }
   }
 }
 

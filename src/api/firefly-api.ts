@@ -112,6 +112,14 @@ export class FireflyApi {
     return toAccount(matches[0]!);
   }
 
+  // Currencies
+
+  /** Enables a currency for the user, as a user would under Options > Currencies. */
+  @step
+  async enableCurrency(code: string) {
+    await expect(await this.request.post(`/api/v1/currencies/${code}/enable`, { data: {} })).toBeOK();
+  }
+
   // Transactions
 
   @step

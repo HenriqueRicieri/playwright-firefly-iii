@@ -60,8 +60,8 @@ jobs:
           cache: npm
       - run: npm ci
 
-      - name: Install ${{ matrix.browser }}
-        run: npx playwright install --with-deps ${{ matrix.browser }}
+      - name: Install browsers (the setup step always uses Chromium)
+        run: npx playwright install --with-deps chromium ${{ matrix.browser }}
 
       - name: Run tests
         run: npx playwright test ${{ matrix.projects }} --repeat-each=${{ inputs.repeat_each || 1 }}
