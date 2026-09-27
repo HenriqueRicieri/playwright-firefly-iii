@@ -1,4 +1,4 @@
-import { expect, type APIRequestContext, type APIResponse } from '@playwright/test';
+import { expect, test, type APIRequestContext, type APIResponse } from '@playwright/test';
 import { step } from '../step';
 import { z } from 'zod';
 import { pastDate } from '../data/builders';
@@ -65,6 +65,23 @@ export type ValidationErrorBody = z.infer<typeof ValidationError>;
 export class FireflyApi {
   constructor(readonly request: APIRequestContext) {}
 
+  /**
+   * POST with one narrow retry. Firefly reorders a user's accounts inside a transaction, and two requests
+   * close together can make MariaDB abort one with a deadlock (SQLSTATE 40001, "try restarting
+   * transaction"). Firefly returns that as a 500 instead of retrying. The database rolled the transaction back, so sending
+   * it again cannot store anything twice. This retries that error only, once,
+   * and records it on the test so it stays visible in the report. Any other failure is returned as is.
+   */
+  private async post(url: string, options: Parameters<APIRequestContext['post']>[1]): Promise<APIResponse> {
+    const response = await this.request.post(url, options);
+    if (response.status() !== 500 || !(await response.text()).includes('SQLSTATE[40001]')) return response;
+    test.info().annotations.push({
+      type: 'firefly deadlock retried',
+      description: `POST ${url} returned 500 with a database deadlock (SQLSTATE 40001) and was sent again.`,
+    });
+    return this.request.post(url, options);
+  }
+
   // Accounts
 
   @step
@@ -73,7 +90,7 @@ export class FireflyApi {
     openingBalance?: string;
     currencyCode?: string;
   }): Promise<Account> {
-    const response = await this.request.post('/api/v1/accounts', {
+    const response = await this.post('/api/v1/accounts', {
       data: {
         name: input.name,
         type: 'asset',
@@ -117,7 +134,7 @@ export class FireflyApi {
   /** Enables a currency for the user, as a user would under Options > Currencies. */
   @step
   async enableCurrency(code: string) {
-    await expect(await this.request.post(`/api/v1/currencies/${code}/enable`, { data: {} })).toBeOK();
+    await expect(await this.post(`/api/v1/currencies/${code}/enable`, { data: {} })).toBeOK();
   }
 
   // Transactions
@@ -137,7 +154,7 @@ export class FireflyApi {
   /** Raw POST /transactions, for tests that check how invalid input is rejected. */
   @step
   async postTransaction(input: { groupTitle?: string; splits: NewSplit[] }): Promise<APIResponse> {
-    return this.request.post('/api/v1/transactions', {
+    return this.post('/api/v1/transactions', {
       data: {
         error_if_duplicate_hash: false,
         group_title: input.groupTitle,
@@ -186,11 +203,11 @@ export class FireflyApi {
   @step
   async createBudget(input: { name: string; limit: string; start: string; end: string }) {
     const budget = await parse(
-      await this.request.post('/api/v1/budgets', { data: { name: input.name } }),
+      await this.post('/api/v1/budgets', { data: { name: input.name } }),
       envelope(IdOnlyResource),
     );
     const limit = await parse(
-      await this.request.post(`/api/v1/budgets/${budget.id}/limits`, {
+      await this.post(`/api/v1/budgets/${budget.id}/limits`, {
         data: { start: input.start, end: input.end, amount: input.limit },
       }),
       envelope(IdOnlyResource),
@@ -220,11 +237,11 @@ export class FireflyApi {
     category: string;
   }): Promise<{ ruleId: string; groupId: string }> {
     const group = await parse(
-      await this.request.post('/api/v1/rule-groups', { data: { title: `Group for ${input.keyword}` } }),
+      await this.post('/api/v1/rule-groups', { data: { title: `Group for ${input.keyword}` } }),
       envelope(IdOnlyResource),
     );
     const rule = await parse(
-      await this.request.post('/api/v1/rules', {
+      await this.post('/api/v1/rules', {
         data: {
           title: `Categorize ${input.keyword}`,
           rule_group_id: group.id,

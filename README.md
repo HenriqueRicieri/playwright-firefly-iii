@@ -85,6 +85,10 @@ comes back. The API is a product surface, not only a shortcut for test setup.
   names, list markup that is not a list, and low contrast. Its findings are recorded per screen in
   [`a11y-baseline.json`](tests/e2e/a11y-baseline.json): a new kind of violation fails the build, and so does a
   fixed one, to keep the baseline honest.
+- **Concurrency:** two requests for the same user close together can make MariaDB abort one with a deadlock
+  while Firefly reorders the user's accounts. Firefly returns it as a 500 (`SQLSTATE[40001] ... try restarting
+transaction`) instead of retrying. The API client retries that one error once and records it on the test, so
+  it shows up in the report instead of as a random failure.
 - **Markup:** the group title field of a split transaction is rendered once per split with the same id.
 - **Odd message:** a transfer between currencies without the destination amount is rejected with "This field
   requires a number" for a field that was not sent at all.
