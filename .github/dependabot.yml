@@ -9,6 +9,10 @@ updates:
     groups:
       dev-dependencies:
         patterns: ['*']
+    ignore:
+      # TypeScript 7 (the Go rewrite) is not supported by typescript-eslint yet. Revisit when it is.
+      - dependency-name: typescript
+        versions: ['>=7']
 
   - package-ecosystem: github-actions
     directory: /
@@ -19,3 +23,8 @@ updates:
     directory: /docker
     schedule:
       interval: weekly
+    ignore:
+      # The test database follows MariaDB's long-term support line, as Firefly's own compose file does
+      # (mariadb:lts). Minor and patch updates are welcome; a new major line is a manual decision.
+      - dependency-name: mariadb
+        update-types: ['version-update:semver-major']
