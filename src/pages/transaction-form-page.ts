@@ -12,6 +12,9 @@ export class TransactionFormPage {
   /** No accessible name: its label is the currency name and the foreign amount shares the placeholder. */
   readonly amount: Locator;
   readonly submitButton: Locator;
+  readonly applyRules: Locator;
+  /** No accessible name: the budget select sits under an icon instead of a label. */
+  readonly budget: Locator;
   readonly errors: Locator;
 
   constructor(private readonly page: Page) {
@@ -20,6 +23,8 @@ export class TransactionFormPage {
     this.destination = page.getByPlaceholder('Destination account');
     this.amount = page.locator('#amount_0');
     this.submitButton = page.getByRole('button', { name: 'Submit' });
+    this.applyRules = page.getByRole('checkbox', { name: 'Apply rules' });
+    this.budget = page.locator('#budget_id_0');
     this.errors = page.locator('.invalid-feedback').filter({ visible: true });
   }
 
@@ -67,12 +72,21 @@ export class TransactionFormPage {
 
   // Convenience flows for the three basic types.
 
-  async createWithdrawal(input: { description: string; from: string; to: string; amount: string }) {
+  async createWithdrawal(input: {
+    description: string;
+    from: string;
+    to: string;
+    amount: string;
+    applyRules?: boolean;
+    budget?: string;
+  }) {
     await this.gotoCreate('withdrawal');
     await this.description.fill(input.description);
     await this.selectAccount('source', input.from);
     await this.typeAccount('destination', input.to);
     await this.fillAmount(input.amount);
+    if (input.applyRules !== undefined) await this.applyRules.setChecked(input.applyRules);
+    if (input.budget !== undefined) await this.budget.selectOption({ label: input.budget });
     return this.submitAndGetId();
   }
 

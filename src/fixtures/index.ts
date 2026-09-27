@@ -19,6 +19,8 @@ interface Fixtures {
   transactionForm: TransactionFormPage;
   transactionDelete: TransactionDeletePage;
   reconcilePage: ReconcilePage;
+  /** Creates a category rule that is deleted after the test, so it cannot touch other tests. */
+  categoryRule: (input: { keyword: string; category: string }) => Promise<void>;
 }
 
 interface WorkerFixtures {
@@ -55,6 +57,13 @@ export const test = base.extend<Fixtures, WorkerFixtures>({
   transactionForm: async ({ page }, use) => use(new TransactionFormPage(page)),
   transactionDelete: async ({ page }, use) => use(new TransactionDeletePage(page)),
   reconcilePage: async ({ page }, use) => use(new ReconcilePage(page)),
+  categoryRule: async ({ api }, use) => {
+    const groups: string[] = [];
+    await use(async (input) => {
+      groups.push((await api.createCategoryRule(input)).groupId);
+    });
+    for (const groupId of groups) await api.deleteRuleGroup(groupId);
+  },
 });
 
 export { expect };

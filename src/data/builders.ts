@@ -13,3 +13,8 @@ export function uniqueName(prefix: string): string {
 export function pastDate(daysAgo = 2): string {
   return new Date(Date.now() - daysAgo * 86_400_000).toISOString().slice(0, 10);
 }
+
+/** A date in the future (YYYY-MM-DD), for periods that must include "now". */
+export function futureDate(daysAhead: number): string {
+  return pastDate(-daysAhead);
+}

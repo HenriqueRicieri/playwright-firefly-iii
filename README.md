@@ -45,6 +45,14 @@ Firefly rounds the total.
 transactions are cleared and nothing is added. When the bank shows less money, the stored correction brings the
 ledger exactly to the statement. A transaction that is not on the statement yet stays open.
 
+**Automatic rules.** Rules change data without anyone looking. A rule that sets a category must fire on a
+matching transaction created in the UI, ignore one that does not match, and stay quiet when "Apply rules" is
+unticked. Each test uses its own keyword and deletes its rule afterwards, because rules apply to every
+transaction of the user.
+
+**Budgets.** An expense linked to a budget moves what was spent against the limit by exactly its amount. An
+expense without a budget does not touch it.
+
 **API contract.** The API is a product surface, not only a shortcut for test setup: authentication, validation
 messages per field, and a round trip where what is stored is what comes back.
 

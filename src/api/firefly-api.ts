@@ -25,6 +25,7 @@ export interface TransactionSplit {
   destinationId: string;
   destinationName: string;
   reconciled: boolean;
+  categoryName: string | null;
 }
 
 export interface Transaction {
@@ -67,6 +68,7 @@ interface TransactionResource {
       destination_id: string;
       destination_name: string;
       reconciled: boolean;
+      category_name: string | null;
     }[];
   };
 }
@@ -147,6 +149,63 @@ export class FireflyApi {
     return (await dataOf<TransactionResource[]>(response)).flatMap((r) => toTransaction(r).splits);
   }
 
+  // Budgets
+
+  /** A budget with one limit for the given period. */
+  async createBudget(input: { name: string; limit: string; start: string; end: string }) {
+    const budget = await dataOf<{ id: string }>(
+      await this.request.post('/api/v1/budgets', { data: { name: input.name } }),
+    );
+    const limit = await dataOf<{ id: string }>(
+      await this.request.post(`/api/v1/budgets/${budget.id}/limits`, {
+        data: { start: input.start, end: input.end, amount: input.limit },
+      }),
+    );
+    return { id: budget.id, name: input.name, limitId: limit.id };
+  }
+
+  /** What has been spent against a budget limit, as Firefly reports it (negative, or "0" if nothing). */
+  async spentOnLimit(budgetId: string, limitId: string): Promise<string> {
+    const limit = await dataOf<{ attributes: { spent: { sum: string }[] } }>(
+      await this.request.get(`/api/v1/budgets/${budgetId}/limits/${limitId}`),
+    );
+    return limit.attributes.spent[0]?.sum ?? '0';
+  }
+
+  // Rules
+
+  /**
+   * Creates an active rule "description contains <keyword> -> set category <category>" in its own group.
+   * Rules apply to every transaction of the user, so tests must use a unique keyword.
+   */
+  async createCategoryRule(input: {
+    keyword: string;
+    category: string;
+  }): Promise<{ ruleId: string; groupId: string }> {
+    const group = await dataOf<{ id: string }>(
+      await this.request.post('/api/v1/rule-groups', { data: { title: `Group for ${input.keyword}` } }),
+    );
+    const rule = await dataOf<{ id: string }>(
+      await this.request.post('/api/v1/rules', {
+        data: {
+          title: `Categorize ${input.keyword}`,
+          rule_group_id: group.id,
+          trigger: 'store-journal',
+          active: true,
+          strict: true,
+          triggers: [{ type: 'description_contains', value: input.keyword }],
+          actions: [{ type: 'set_category', value: input.category }],
+        },
+      }),
+    );
+    return { ruleId: rule.id, groupId: group.id };
+  }
+
+  async deleteRuleGroup(groupId: string) {
+    // Deleting the group deletes its rules too.
+    expect((await this.request.delete(`/api/v1/rule-groups/${groupId}`)).status()).toBe(204);
+  }
+
   /** Status of GET /transactions/{id}, for checking that something was really deleted. */
   async transactionStatus(id: string): Promise<number> {
     return (await this.request.get(`/api/v1/transactions/${id}`)).status();
@@ -184,6 +243,7 @@ function toTransaction(resource: TransactionResource): Transaction {
       destinationId: t.destination_id,
       destinationName: t.destination_name,
       reconciled: t.reconciled,
+      categoryName: t.category_name,
     })),
   };
 }
