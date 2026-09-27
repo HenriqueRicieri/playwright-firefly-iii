@@ -37,12 +37,14 @@ export default defineConfig({
       testDir: 'tests/e2e',
       dependencies: ['setup'],
       use: { ...devices['Desktop Firefox'] },
+      testIgnore: /accessibility/,
     },
     {
       name: 'e2e-webkit',
       testDir: 'tests/e2e',
       dependencies: ['setup'],
       use: { ...devices['Desktop Safari'] },
+      testIgnore: /accessibility/,
     },
   ],
 });

@@ -1,0 +1,21 @@
+{
+  "dashboard": ["button-name", "link-name", "listitem"],
+  "new asset account": [
+    "button-name",
+    "color-contrast",
+    "label",
+    "link-in-text-block",
+    "link-name",
+    "listitem"
+  ],
+  "new withdrawal": [
+    "aria-required-children",
+    "button-name",
+    "color-contrast",
+    "link-name",
+    "listitem",
+    "select-name"
+  ],
+  "budgets": ["button-name", "color-contrast", "link-name", "listitem", "select-name"],
+  "profile": ["button-name", "link-name", "listitem"]
+}

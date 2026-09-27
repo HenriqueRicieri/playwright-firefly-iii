@@ -1,0 +1,21 @@
+# Updates arrive as pull requests, and CI runs the whole suite on each one before anything is merged.
+# That includes Firefly III itself: a new version is a conscious upgrade that has to pass the tests.
+version: 2
+updates:
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly
+    groups:
+      dev-dependencies:
+        patterns: ['*']
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+
+  - package-ecosystem: docker-compose
+    directory: /docker
+    schedule:
+      interval: weekly
